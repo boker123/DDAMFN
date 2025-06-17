@@ -18,10 +18,42 @@ from networks.DDAM import DDAMNet
 from sklearn.metrics import confusion_matrix
 from sam import SAM
 eps = sys.float_info.epsilon
+# -----------------------捕捉异常----------------------------
+import warnings
+import traceback
+import sys
+
+
+def detailed_warning_handler(message, category, filename, lineno, file=None, line=None):
+    print(f"\n{'=' * 80}")
+    print(f"⚠️  WARNING DETECTED:")
+    print(f"   Category: {category.__name__}")
+    print(f"   Message: {message}")
+    print(f"   File: {filename}")
+    print(f"   Line: {lineno}")
+    print(f"{'=' * 80}")
+    print("📍 FULL STACK TRACE:")
+
+    # 打印完整的调用栈
+    stack = traceback.extract_stack()
+    for frame in stack[:-1]:  # 排除当前warning_handler frame
+        print(f"  File \"{frame.filename}\", line {frame.lineno}, in {frame.name}")
+        if frame.line:
+            print(f"    {frame.line}")
+
+    print(f"{'=' * 80}\n")
+
+
+# 设置自定义warning处理器
+warnings.showwarning = detailed_warning_handler
+
+# 确保所有warnings都被显示
+warnings.filterwarnings('always')
+# -----------------------捕捉异常----------------------------
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--raf_path', type=str, default='./data/fer_112_112_v2.0/rafdb/', help='Raf-DB dataset path.')
+    parser.add_argument('--raf_path', type=str, default='C:\\Users\\boker\\PycharmProjects\\DDAMFN\\data\\RAF_DB', help='Raf-DB dataset path.')
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size.')
     parser.add_argument('--lr', type=float, default=5e-4, help='Initial learning rate for sgd.')
     parser.add_argument('--workers', default=16, type=int, help='Number of data loading workers.')
@@ -32,7 +64,7 @@ def parse_args():
 class AttentionLoss(nn.Module):
     def __init__(self, ):
         super(AttentionLoss, self).__init__()
-    
+
     def forward(self, x):
         num_head = len(x)
         loss = 0
@@ -46,8 +78,8 @@ class AttentionLoss(nn.Module):
             loss = cnt/(loss + eps)
         else:
             loss = 0
-        return loss     
-                
+        return loss
+
 def plot_confusion_matrix(cm, classes,
                           normalize=False,
                           title='Confusion matrix',
@@ -72,7 +104,7 @@ def plot_confusion_matrix(cm, classes,
     plt.yticks(tick_marks, classes)
 
     fmt = '.2f' if normalize else 'd'
-    
+
     thresh = cm.max() / 2.
     for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
         plt.text(j, i, format(cm[i, j]*100, fmt)+'%',
@@ -83,7 +115,7 @@ def plot_confusion_matrix(cm, classes,
     plt.xlabel('Predicted', fontsize=18)
     plt.tight_layout()
 
-class_names = ['Neutral', 'Happy', 'Sad', 'Surprise', 'Fear', 'Disgust', 'Angry']  
+class_names = ['Neutral', 'Happy', 'Sad', 'Surprise', 'Fear', 'Disgust', 'Angry']
 def run_training():
     args = parse_args()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -108,39 +140,39 @@ def run_training():
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225]),
         transforms.RandomErasing(scale=(0.02,0.25)),
-        ])   
+        ])
 
-    train_dataset = datasets.ImageFolder(f'{args.raf_path}/train', transform = data_transforms)   
-    
+    train_dataset = datasets.ImageFolder(f'{args.raf_path}/train', transform = data_transforms)
+
     print('Whole train set size:', train_dataset.__len__())
 
     train_loader = torch.utils.data.DataLoader(train_dataset,
                                                batch_size = args.batch_size,
                                                num_workers = args.workers,
-                                               shuffle = True,  
+                                               shuffle = True,
                                                pin_memory = True)
 
     data_transforms_val = transforms.Compose([
         transforms.Resize((112, 112)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])])   
-  
-    val_dataset = datasets.ImageFolder(f'{args.raf_path}/val', transform = data_transforms_val)    
+                                 std=[0.229, 0.224, 0.225])])
+
+    val_dataset = datasets.ImageFolder(f'{args.raf_path}/test', transform = data_transforms_val)
 
     print('Validation set size:', val_dataset.__len__())
-    
+
     val_loader = torch.utils.data.DataLoader(val_dataset,
                                                batch_size = args.batch_size,
                                                num_workers = args.workers,
-                                               shuffle = False,  
+                                               shuffle = False,
                                                pin_memory = True)
 
     criterion_cls = torch.nn.CrossEntropyLoss()
 
     criterion_at = AttentionLoss()
 
-    params = list(model.parameters()) 
+    params = list(model.parameters())
     #optimizer = torch.optim.SGD(params,lr=args.lr, weight_decay = 1e-4, momentum=0.9)
     #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
     optimizer = SAM(model.parameters(), torch.optim.Adam, lr=args.lr, rho=0.05, adaptive=False, )
@@ -159,27 +191,25 @@ def run_training():
 
             imgs = imgs.to(device)
             targets = targets.to(device)
-            
+
             out,feat,heads = model(imgs)
-            
-            loss = criterion_cls(out,targets) + 0.1*criterion_at(heads)  
+
+            loss = criterion_cls(out,targets) + 0.1*criterion_at(heads)
 
             loss.backward()
             optimizer.first_step(zero_grad=True)
-            
+
             imgs = imgs.to(device)
             targets = targets.to(device)
-            
+
             out,feat,heads = model(imgs)
-            
-            loss = criterion_cls(out,targets) + 0.1*criterion_at(heads) 
-            
+
+            loss = criterion_cls(out,targets) + 0.1*criterion_at(heads)
+
             optimizer.zero_grad()
             loss.backward()
-            optimizer.second_step(zero_grad=True)            
-                                    
-     
-            
+            optimizer.second_step(zero_grad=True)
+
             running_loss += loss
             _, predicts = torch.max(out, 1)
             correct_num = torch.eq(predicts, targets).sum()
@@ -188,24 +218,26 @@ def run_training():
         acc = correct_sum.float() / float(train_dataset.__len__())
         running_loss = running_loss/iter_cnt
         tqdm.write('[Epoch %d] Training accuracy: %.4f. Loss: %.3f. LR %.6f' % (epoch, acc, running_loss,optimizer.param_groups[0]['lr']))
-        
+
+        scheduler.step()
+
         with torch.no_grad():
             running_loss = 0.0
             iter_cnt = 0
             bingo_cnt = 0
             sample_cnt = 0
-            
+
             ## for calculating balanced accuracy
             y_true = []
             y_pred = []
- 
+
             model.eval()
             for (imgs, targets) in val_loader:
                 imgs = imgs.to(device)
                 targets = targets.to(device)
-                
+
                 out,feat,heads = model(imgs)
-                loss = criterion_cls(out,targets)+ 0.1*criterion_at(heads) 
+                loss = criterion_cls(out,targets)+ 0.1*criterion_at(heads)
 
                 running_loss += loss
 
@@ -213,7 +245,7 @@ def run_training():
                 correct_num  = torch.eq(predicts,targets)
                 bingo_cnt += correct_num.sum().cpu()
                 sample_cnt += imgs.size(0)
-                
+
                 y_true.append(targets.cpu().numpy())
                 y_pred.append(predicts.cpu().numpy())
 
@@ -222,10 +254,9 @@ def run_training():
                     all_targets = targets
                 else:
                     all_predicted = torch.cat((all_predicted, predicts),0)
-                    all_targets = torch.cat((all_targets, targets),0)                  
-                iter_cnt+=1        
-            running_loss = running_loss/iter_cnt   
-            scheduler.step()
+                    all_targets = torch.cat((all_targets, targets),0)
+                iter_cnt+=1
+            running_loss = running_loss/iter_cnt
 
             acc = bingo_cnt.float()/float(sample_cnt)
             acc = np.around(acc.numpy(),4)
@@ -244,17 +275,16 @@ def run_training():
                              'optimizer_state_dict': optimizer.state_dict(),},
                             os.path.join('checkpoints_ver2.0', "rafdb_epoch"+str(epoch)+"_acc"+str(acc)+"_bacc"+str(balanced_acc)+".pth"))
                 tqdm.write('Model saved.')
-                
+
                 # Compute confusion matrix
                 matrix = confusion_matrix(all_targets.data.cpu().numpy(), all_predicted.cpu().numpy())
                 np.set_printoptions(precision=2)
                 plt.figure(figsize=(10, 8))
                 # Plot normalized confusion matrix
                 plot_confusion_matrix(matrix, classes=class_names, normalize=True, title= 'RAF-DB Confusion Matrix (acc: %0.2f%%)' %(acc*100))
-                 
+
                 plt.savefig(os.path.join('checkpoints_ver2.0', "rafdb_epoch"+str(epoch)+"_acc"+str(acc)+"_bacc"+str(balanced_acc)+".png"))
                 plt.close()
-        
-if __name__ == "__main__":        
+
+if __name__ == "__main__":
     run_training()
-    

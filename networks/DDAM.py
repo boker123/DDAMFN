@@ -24,10 +24,28 @@ class DDAMNet(nn.Module):
         super(DDAMNet, self).__init__()
 
         net = MixedFeatureNet.MixedFeatureNet()
-                
+
         if pretrained:
-            add_safe_globals(['MixedFeatureNet', MixedFeatureNet])
-            net = torch.load(os.path.join('./pretrained/', "MFN_msceleb.pth"))  # ✅ 不需要再 load_state_dict
+            # Check if CUDA is available and set a device accordingly
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+            # First, try the standard approach with proper safe globals
+            try:
+                # Add all necessary classes to safe globals
+                add_safe_globals({
+                    'MixedFeatureNet': MixedFeatureNet.MixedFeatureNet,
+                    'Linear_block': Linear_block,
+                    'Flatten': Flatten,
+                    'CoordAttHead': CoordAttHead,
+                    'CoordAtt': CoordAtt,
+                    'h_sigmoid': h_sigmoid,
+                    'h_swish': h_swish
+                })
+                net = torch.load(os.path.join('./pretrained/', "MFN_msceleb.pth"))
+            except:
+                # Fallback: Disable safe loading entirely
+                net = torch.load(os.path.join('./pretrained/', "MFN_msceleb.pth"),
+                                 weights_only=False, map_location=device)
       
         self.features = nn.Sequential(*list(net.children())[:-4])
         self.num_head = num_head

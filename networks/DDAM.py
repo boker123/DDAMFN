@@ -1,5 +1,7 @@
 from torch import nn
 import torch
+from torch.serialization import add_safe_globals
+
 from networks import MixedFeatureNet
 from torch.nn import Module
 import os
@@ -24,7 +26,8 @@ class DDAMNet(nn.Module):
         net = MixedFeatureNet.MixedFeatureNet()
                 
         if pretrained:
-            net = torch.load(os.path.join('./pretrained/', "MFN_msceleb.pth"))       
+            add_safe_globals(['MixedFeatureNet', MixedFeatureNet])
+            net = torch.load(os.path.join('./pretrained/', "MFN_msceleb.pth"))  # ✅ 不需要再 load_state_dict
       
         self.features = nn.Sequential(*list(net.children())[:-4])
         self.num_head = num_head

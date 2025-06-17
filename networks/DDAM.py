@@ -24,7 +24,8 @@ class DDAMNet(nn.Module):
         net = MixedFeatureNet.MixedFeatureNet()
                 
         if pretrained:
-            net = torch.load(os.path.join('./pretrained/', "MFN_msceleb.pth"))       
+            state_dict = torch.load(os.path.join('./pretrained/', "MFN_msceleb.pth"))
+            net.load_state_dict(state_dict)
       
         self.features = nn.Sequential(*list(net.children())[:-4])
         self.num_head = num_head

@@ -1,4 +1,3 @@
-
 from torch.nn import Linear, Conv2d, BatchNorm1d, BatchNorm2d, PReLU, Sequential, Module
 import torch
 import torch.nn as nn
@@ -191,7 +190,9 @@ class Mix_Residual(Module):
         super(Mix_Residual, self).__init__()
         modules = []
         for _ in range(num_block):
-            modules.append(Mix_Depth_Wise(c, c, residual=True, kernel=kernel, padding=padding, stride=stride, groups=groups, kernel_size=kernel_size, split_out_channels=split_out_channels ))
+            modules.append(Mix_Depth_Wise(c, c, residual=True, kernel=kernel, padding=padding, stride=stride,
+                                          groups=groups, kernel_size=kernel_size,
+                                          split_out_channels=split_out_channels ))
         self.model = Sequential(*modules)
     def forward(self, x):
         return self.model(x)

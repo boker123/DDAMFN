@@ -1,5 +1,7 @@
 from torch import nn
 import torch
+from torch.serialization import add_safe_globals
+
 from networks import MixedFeatureNet
 from torch.nn import Module
 import os
@@ -24,7 +26,26 @@ class DDAMNet(nn.Module):
         net = MixedFeatureNet.MixedFeatureNet()
                 
         if pretrained:
-            net = torch.load(os.path.join('./pretrained/', "MFN_msceleb.pth"))       
+            # Alternative approach: Load with pickle module directly
+            import pickle
+
+            # First, try the standard approach with proper safe globals
+            try:
+                # Add all necessary classes to safe globals
+                add_safe_globals({
+                    'MixedFeatureNet': MixedFeatureNet.MixedFeatureNet,
+                    'Linear_block': Linear_block,
+                    'Flatten': Flatten,
+                    'CoordAttHead': CoordAttHead,
+                    'CoordAtt': CoordAtt,
+                    'h_sigmoid': h_sigmoid,
+                    'h_swish': h_swish
+                })
+                net = torch.load(os.path.join('./pretrained/', "MFN_msceleb.pth"))
+            except:
+                # Fallback: Disable safe loading entirely
+                net = torch.load(os.path.join('./pretrained/', "MFN_msceleb.pth"),
+                                 weights_only=False, map_location='cpu')
       
         self.features = nn.Sequential(*list(net.children())[:-4])
         self.num_head = num_head
